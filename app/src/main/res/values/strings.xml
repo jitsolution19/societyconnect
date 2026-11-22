@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">SocietyConnect</string>
+    <string name="sign_in_google">Sign in with Google</string>
+    <string name="auth_headline">Collective buying power for your residential society</string>
+    <string name="auth_subtitle">Organize bulk grocery deals, essential home services, and transparent vendor negotiations across your apartment community.</string>
+    <string name="role_member">Member</string>
+    <string name="role_admin">Society Admin</string>
+    <string name="role_vendor">Vendor</string>
+    <string name="nav_deals">Deals</string>
+    <string name="nav_activity">My Orders</string>
+    <string name="nav_admin">Admin Hub</string>
+    <string name="nav_vendor">Vendor Hub</string>
+    <string name="nav_catalog">Catalog</string>
+    <string name="nav_alerts">Alerts</string>
+    <string name="create_offer">Create Offer</string>
+    <string name="sign_out">Sign Out</string>
+</resources>

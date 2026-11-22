@@ -1,0 +1,6 @@
+{
+  "name": "SocietyConnect",
+  "description": "Community bulk deals, group purchases, and society services platform connecting society admins, members, and vendors.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,439 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 160 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() &&
+             ('email_verified' in request.auth.token) &&
+             request.auth.token.email_verified == true &&
+             ('email' in request.auth.token) &&
+             request.auth.token.email == 'Akanshaguptaa1994@gmail.com';
+    }
+
+    function isSocietyAdmin(societyId) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/societies/$(societyId)) &&
+             get(/databases/$(database)/documents/societies/$(societyId)).data.adminUid == request.auth.uid;
+    }
+
+    function isSocietyMember(societyId) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/societies/$(societyId)/members/$(request.auth.uid));
+    }
+
+    function isValidCategory(cat) {
+      return cat in ['GROCERY', 'CLEANING', 'DAILY_ESSENTIALS', 'PEST_CONTROL', 'APPLIANCE', 'PLUMBING_ELECTRICAL', 'OTHER'];
+    }
+
+    // --- VALIDATION HELPERS ---
+
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             data.activeRole in ['MEMBER', 'ADMIN', 'VENDOR'] &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 120)) &&
+             (!('activeSocietyId' in data) || (data.activeSocietyId is string && data.activeSocietyId.size() <= 128)) &&
+             (!('activeSocietyName' in data) || (data.activeSocietyName is string && data.activeSocietyName.size() <= 120)) &&
+             (!('flatNumber' in data) || (data.flatNumber is string && data.flatNumber.size() <= 40)) &&
+             (!('businessName' in data) || (data.businessName is string && data.businessName.size() <= 120)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidSociety(data) {
+      return data.adminUid is string && data.adminUid.size() >= 1 && data.adminUid.size() <= 128 &&
+             data.adminName is string && data.adminName.size() >= 1 && data.adminName.size() <= 80 &&
+             data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+             data.city is string && data.city.size() >= 2 && data.city.size() <= 60 &&
+             data.address is string && data.address.size() >= 2 && data.address.size() <= 200 &&
+             data.totalUnits is int && data.totalUnits >= 1 && data.totalUnits <= 10000 &&
+             data.inviteCode is string && data.inviteCode.size() >= 4 && data.inviteCode.size() <= 16 &&
+             data.memberCount is int && data.memberCount >= 1 && data.memberCount <= 10000 &&
+             data.discoverable is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidSocietyMember(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.societyId is string && data.societyId.size() >= 1 && data.societyId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             data.flatNumber is string && data.flatNumber.size() >= 1 && data.flatNumber.size() <= 40 &&
+             data.role in ['MEMBER', 'ADMIN'] &&
+             data.status in ['ACTIVE', 'INACTIVE'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidOffer(data) {
+      return data.societyId is string && data.societyId.size() >= 1 && data.societyId.size() <= 128 &&
+             data.societyName is string && data.societyName.size() >= 1 && data.societyName.size() <= 100 &&
+             data.societyAdminUid is string && data.societyAdminUid.size() >= 1 && data.societyAdminUid.size() <= 128 &&
+             data.title is string && data.title.size() >= 2 && data.title.size() <= 120 &&
+             data.description is string && data.description.size() >= 2 && data.description.size() <= 600 &&
+             isValidCategory(data.category) &&
+             (data.estimatedPrice is int || data.estimatedPrice is float) && data.estimatedPrice > 0 &&
+             data.unitLabel is string && data.unitLabel.size() >= 1 && data.unitLabel.size() <= 50 &&
+             (data.negotiatedPrice is int || data.negotiatedPrice is float) && data.negotiatedPrice >= 0 &&
+             data.minThreshold is int && data.minThreshold >= 1 && data.minThreshold <= 10000 &&
+             data.thresholdType in ['MEMBERS', 'QUANTITY'] &&
+             data.maxLimit is int && data.maxLimit >= 0 && data.maxLimit <= 100000 &&
+             data.interestedCount is int && data.interestedCount >= 0 &&
+             data.totalRequestedQty is int && data.totalRequestedQty >= 0 &&
+             data.confirmedCount is int && data.confirmedCount >= 0 &&
+             data.confirmedQty is int && data.confirmedQty >= 0 &&
+             data.status in ['COLLECTING_INTEREST', 'THRESHOLD_REACHED', 'VENDOR_NEGOTIATION', 'FINAL_OFFER_PUBLISHED', 'CLOSED', 'CANCELLED'] &&
+             data.deadlineLabel is string && data.deadlineLabel.size() >= 1 && data.deadlineLabel.size() <= 60 &&
+             data.serviceDetails is string && data.serviceDetails.size() <= 400 &&
+             (!('selectedVendorUid' in data) || (data.selectedVendorUid is string && data.selectedVendorUid.size() <= 128)) &&
+             (!('selectedVendorName' in data) || (data.selectedVendorName is string && data.selectedVendorName.size() <= 120)) &&
+             (!('selectedQuotationId' in data) || (data.selectedQuotationId is string && data.selectedQuotationId.size() <= 128)) &&
+             (!('finalTerms' in data) || (data.finalTerms is string && data.finalTerms.size() <= 500)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidParticipation(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.memberName is string && data.memberName.size() >= 1 && data.memberName.size() <= 80 &&
+             data.flatNumber is string && data.flatNumber.size() >= 1 && data.flatNumber.size() <= 40 &&
+             data.societyId is string && data.societyId.size() >= 1 && data.societyId.size() <= 128 &&
+             data.societyAdminUid is string && data.societyAdminUid.size() >= 1 && data.societyAdminUid.size() <= 128 &&
+             data.offerId is string && data.offerId.size() >= 1 && data.offerId.size() <= 128 &&
+             data.offerTitle is string && data.offerTitle.size() >= 1 && data.offerTitle.size() <= 120 &&
+             data.stage in ['INTERESTED', 'WITHDRAWN', 'CONFIRMED', 'CANCELLED'] &&
+             data.requestedQty is int && data.requestedQty >= 1 && data.requestedQty <= 1000 &&
+             data.confirmedQty is int && data.confirmedQty >= 0 && data.confirmedQty <= 1000 &&
+             data.preferredOption is string && data.preferredOption.size() <= 120 &&
+             (data.unitPrice is int || data.unitPrice is float) && data.unitPrice >= 0 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidVendor(data) {
+      return data.vendorUid is string && data.vendorUid.size() >= 1 && data.vendorUid.size() <= 128 &&
+             data.businessName is string && data.businessName.size() >= 2 && data.businessName.size() <= 100 &&
+             isValidCategory(data.category) &&
+             data.city is string && data.city.size() >= 2 && data.city.size() <= 60 &&
+             data.description is string && data.description.size() >= 2 && data.description.size() <= 300 &&
+             data.activeCatalog is bool &&
+             data.completedDeals is int && data.completedDeals >= 0 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidQuotation(data) {
+      return data.societyId is string && data.societyId.size() >= 1 && data.societyId.size() <= 128 &&
+             data.societyName is string && data.societyName.size() >= 1 && data.societyName.size() <= 100 &&
+             data.societyAdminUid is string && data.societyAdminUid.size() >= 1 && data.societyAdminUid.size() <= 128 &&
+             data.offerId is string && data.offerId.size() >= 1 && data.offerId.size() <= 128 &&
+             data.offerTitle is string && data.offerTitle.size() >= 1 && data.offerTitle.size() <= 120 &&
+             isValidCategory(data.offerCategory) &&
+             data.aggregatedMemberCount is int && data.aggregatedMemberCount >= 0 &&
+             data.aggregatedQty is int && data.aggregatedQty >= 0 &&
+             (data.estimatedPrice is int || data.estimatedPrice is float) && data.estimatedPrice >= 0 &&
+             data.unitLabel is string && data.unitLabel.size() >= 1 && data.unitLabel.size() <= 50 &&
+             data.vendorUid is string && data.vendorUid.size() >= 1 && data.vendorUid.size() <= 128 &&
+             data.vendorName is string && data.vendorName.size() >= 1 && data.vendorName.size() <= 100 &&
+             data.status in ['INVITED', 'SUBMITTED', 'ACCEPTED', 'REJECTED'] &&
+             (data.quotedPrice is int || data.quotedPrice is float) && data.quotedPrice >= 0 &&
+             data.availability is string && data.availability.size() <= 120 &&
+             data.estimatedDelivery is string && data.estimatedDelivery.size() <= 120 &&
+             data.proposalNotes is string && data.proposalNotes.size() <= 500 &&
+             data.adminQuery is string && data.adminQuery.size() <= 300 &&
+             data.vendorReply is string && data.vendorReply.size() <= 300 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // --- 1. USERS (Owner-only PII isolation) ---
+    match /users/{userId} {
+      allow get, list: if isSignedIn() && request.auth.uid == userId;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'activeRole', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'email', 'activeRole', 'activeSocietyId', 'activeSocietyName', 'flatNumber', 'businessName', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'activeRole', 'activeSocietyId', 'activeSocietyName', 'flatNumber', 'businessName', 'updatedAt']);
+
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // --- 2. SOCIETIES (Multi-tenancy root) ---
+    match /societies/{societyId} {
+      allow get, list: if isSignedIn() && (resource.data.adminUid == request.auth.uid || resource.data.discoverable == true);
+
+      allow create: if isSignedIn() &&
+                       isValidId(societyId) &&
+                       incoming().adminUid == request.auth.uid &&
+                       incoming().keys().hasAll(['adminUid', 'adminName', 'name', 'city', 'address', 'totalUnits', 'inviteCode', 'memberCount', 'discoverable', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['adminUid', 'adminName', 'name', 'city', 'address', 'totalUnits', 'inviteCode', 'memberCount', 'discoverable', 'createdAt', 'updatedAt']) &&
+                       isValidSociety(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(societyId) &&
+                       isValidSociety(incoming()) &&
+                       incoming().adminUid == existing().adminUid &&
+                       incoming().createdAt == existing().createdAt && (
+                         ((existing().adminUid == request.auth.uid || isSuperAdmin()) &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['adminName', 'name', 'city', 'address', 'totalUnits', 'inviteCode', 'memberCount', 'discoverable', 'updatedAt'])) ||
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['memberCount', 'updatedAt']) &&
+                          incoming().memberCount == existing().memberCount + 1)
+                       );
+
+      allow delete: if isSignedIn() && isValidId(societyId) && (existing().adminUid == request.auth.uid || isSuperAdmin());
+
+      // --- 2a. SOCIETY MEMBERS ---
+      match /members/{memberId} {
+        allow get: if isSignedIn() && isValidId(societyId) && isValidId(memberId) &&
+                      (request.auth.uid == memberId || isSocietyAdmin(societyId) || isSuperAdmin());
+
+        allow list: if isSignedIn() && (isSocietyAdmin(societyId) || isSuperAdmin());
+
+        allow create: if isSignedIn() &&
+                         isValidId(societyId) &&
+                         isValidId(memberId) &&
+                         request.auth.uid == memberId &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().societyId == societyId &&
+                         exists(/databases/$(database)/documents/societies/$(societyId)) &&
+                         incoming().keys().hasAll(['userId', 'societyId', 'displayName', 'flatNumber', 'role', 'status', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'societyId', 'displayName', 'flatNumber', 'role', 'status', 'createdAt', 'updatedAt']) &&
+                         isValidSocietyMember(incoming()) &&
+                         (incoming().role == 'MEMBER' || (incoming().role == 'ADMIN' && isSocietyAdmin(societyId)));
+
+        allow update: if isSignedIn() &&
+                         isValidId(societyId) &&
+                         isValidId(memberId) &&
+                         isValidSocietyMember(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().societyId == existing().societyId &&
+                         incoming().createdAt == existing().createdAt && (
+                           (request.auth.uid == memberId &&
+                            incoming().role == existing().role &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'flatNumber', 'status', 'updatedAt'])) ||
+                           ((isSocietyAdmin(societyId) || isSuperAdmin()) &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'flatNumber', 'role', 'status', 'updatedAt']))
+                         );
+
+        allow delete: if isSignedIn() && isValidId(societyId) && isValidId(memberId) &&
+                         (request.auth.uid == memberId || isSocietyAdmin(societyId) || isSuperAdmin());
+      }
+
+      // --- 2b. SOCIETY OFFERS ---
+      match /offers/{offerId} {
+        allow get, list: if isSignedIn() && (isSocietyAdmin(societyId) || isSocietyMember(societyId) || isSuperAdmin());
+
+        allow create: if isSignedIn() &&
+                         isValidId(societyId) &&
+                         isValidId(offerId) &&
+                         isSocietyAdmin(societyId) &&
+                         incoming().societyId == societyId &&
+                         incoming().societyAdminUid == request.auth.uid &&
+                         incoming().keys().hasAll([
+                           'societyId', 'societyName', 'societyAdminUid', 'title', 'description', 'category',
+                           'estimatedPrice', 'unitLabel', 'negotiatedPrice', 'minThreshold', 'thresholdType',
+                           'maxLimit', 'interestedCount', 'totalRequestedQty', 'confirmedCount', 'confirmedQty',
+                           'status', 'deadlineLabel', 'serviceDetails', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'societyId', 'societyName', 'societyAdminUid', 'title', 'description', 'category',
+                           'estimatedPrice', 'unitLabel', 'negotiatedPrice', 'minThreshold', 'thresholdType',
+                           'maxLimit', 'interestedCount', 'totalRequestedQty', 'confirmedCount', 'confirmedQty',
+                           'status', 'deadlineLabel', 'serviceDetails',
+                           'selectedVendorUid', 'selectedVendorName', 'selectedQuotationId', 'finalTerms',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidOffer(incoming());
+
+        allow update: if isSignedIn() &&
+                         isValidId(societyId) &&
+                         isValidId(offerId) &&
+                         isValidOffer(incoming()) &&
+                         incoming().societyId == existing().societyId &&
+                         incoming().societyAdminUid == existing().societyAdminUid &&
+                         incoming().createdAt == existing().createdAt && (
+                           ((isSocietyAdmin(societyId) || isSuperAdmin()) &&
+                            existing().status != 'CLOSED' && existing().status != 'CANCELLED' &&
+                            incoming().diff(existing()).affectedKeys().hasOnly([
+                              'title', 'description', 'category', 'estimatedPrice', 'unitLabel',
+                              'negotiatedPrice', 'minThreshold', 'thresholdType', 'maxLimit',
+                              'interestedCount', 'totalRequestedQty', 'confirmedCount', 'confirmedQty',
+                              'status', 'deadlineLabel', 'serviceDetails',
+                              'selectedVendorUid', 'selectedVendorName', 'selectedQuotationId', 'finalTerms',
+                              'updatedAt'
+                            ])) ||
+                           (isSocietyMember(societyId) &&
+                            existing().status != 'CLOSED' && existing().status != 'CANCELLED' &&
+                            incoming().diff(existing()).affectedKeys().hasOnly([
+                              'interestedCount', 'totalRequestedQty', 'confirmedCount', 'confirmedQty', 'status', 'updatedAt'
+                            ]) &&
+                            (incoming().status == existing().status ||
+                             (existing().status == 'COLLECTING_INTEREST' && incoming().status == 'THRESHOLD_REACHED')))
+                         );
+
+        allow delete: if isSignedIn() && isValidId(societyId) && isValidId(offerId) &&
+                         (isSocietyAdmin(societyId) || isSuperAdmin());
+      }
+    }
+
+    // --- 3. MEMBER PARTICIPATIONS (Interest & Final Order Confirmation) ---
+    match /participations/{participationId} {
+      allow get, list: if isSignedIn() &&
+                          (resource.data.userId == request.auth.uid ||
+                           resource.data.societyAdminUid == request.auth.uid ||
+                           isSuperAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(participationId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'userId', 'memberName', 'flatNumber', 'societyId', 'societyAdminUid',
+                         'offerId', 'offerTitle', 'stage', 'requestedQty', 'confirmedQty',
+                         'preferredOption', 'unitPrice', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'memberName', 'flatNumber', 'societyId', 'societyAdminUid',
+                         'offerId', 'offerTitle', 'stage', 'requestedQty', 'confirmedQty',
+                         'preferredOption', 'unitPrice', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidParticipation(incoming()) &&
+                       exists(/databases/$(database)/documents/societies/$(incoming().societyId)/members/$(request.auth.uid)) &&
+                       exists(/databases/$(database)/documents/societies/$(incoming().societyId)/offers/$(incoming().offerId));
+
+      allow update: if isSignedIn() &&
+                       isValidId(participationId) &&
+                       isValidParticipation(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().societyId == existing().societyId &&
+                       incoming().societyAdminUid == existing().societyAdminUid &&
+                       incoming().offerId == existing().offerId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (existing().userId == request.auth.uid || existing().societyAdminUid == request.auth.uid || isSuperAdmin()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'stage', 'requestedQty', 'confirmedQty', 'preferredOption',
+                         'unitPrice', 'offerTitle', 'memberName', 'flatNumber', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() && isValidId(participationId) &&
+                       (existing().userId == request.auth.uid || existing().societyAdminUid == request.auth.uid || isSuperAdmin());
+    }
+
+    // --- 4. VENDOR CATALOG ---
+    match /vendors/{vendorId} {
+      allow get, list: if isSignedIn() &&
+                          (resource.data.vendorUid == request.auth.uid || resource.data.activeCatalog == true);
+
+      allow create: if isSignedIn() &&
+                       isValidId(vendorId) &&
+                       request.auth.uid == vendorId &&
+                       incoming().vendorUid == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'vendorUid', 'businessName', 'category', 'city', 'description',
+                         'activeCatalog', 'completedDeals', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'vendorUid', 'businessName', 'category', 'city', 'description',
+                         'activeCatalog', 'completedDeals', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidVendor(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(vendorId) &&
+                       isValidVendor(incoming()) &&
+                       incoming().vendorUid == existing().vendorUid &&
+                       incoming().createdAt == existing().createdAt && (
+                         (request.auth.uid == vendorId &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'businessName', 'category', 'city', 'description', 'activeCatalog', 'updatedAt'
+                          ])) ||
+                         isSuperAdmin()
+                       );
+
+      allow delete: if isSignedIn() && isValidId(vendorId) && (request.auth.uid == vendorId || isSuperAdmin());
+    }
+
+    // --- 5. QUOTATIONS (Admin <-> Vendor, isolated from Member PII) ---
+    match /quotations/{quotationId} {
+      allow get, list: if isSignedIn() &&
+                          (resource.data.vendorUid == request.auth.uid ||
+                           resource.data.societyAdminUid == request.auth.uid ||
+                           isSuperAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(quotationId) &&
+                       incoming().societyAdminUid == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'societyId', 'societyName', 'societyAdminUid', 'offerId', 'offerTitle', 'offerCategory',
+                         'aggregatedMemberCount', 'aggregatedQty', 'estimatedPrice', 'unitLabel',
+                         'vendorUid', 'vendorName', 'status', 'quotedPrice', 'availability',
+                         'estimatedDelivery', 'proposalNotes', 'adminQuery', 'vendorReply',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'societyId', 'societyName', 'societyAdminUid', 'offerId', 'offerTitle', 'offerCategory',
+                         'aggregatedMemberCount', 'aggregatedQty', 'estimatedPrice', 'unitLabel',
+                         'vendorUid', 'vendorName', 'status', 'quotedPrice', 'availability',
+                         'estimatedDelivery', 'proposalNotes', 'adminQuery', 'vendorReply',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidQuotation(incoming()) &&
+                       exists(/databases/$(database)/documents/societies/$(incoming().societyId)/offers/$(incoming().offerId));
+
+      allow update: if isSignedIn() &&
+                       isValidId(quotationId) &&
+                       isValidQuotation(incoming()) &&
+                       incoming().societyId == existing().societyId &&
+                       incoming().societyAdminUid == existing().societyAdminUid &&
+                       incoming().offerId == existing().offerId &&
+                       incoming().vendorUid == existing().vendorUid &&
+                       incoming().createdAt == existing().createdAt && (
+                         ((existing().societyAdminUid == request.auth.uid || isSuperAdmin()) &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'status', 'adminQuery', 'aggregatedMemberCount', 'aggregatedQty', 'updatedAt'
+                          ])) ||
+                         (existing().vendorUid == request.auth.uid &&
+                          existing().status != 'ACCEPTED' && existing().status != 'REJECTED' &&
+                          (incoming().status == 'INVITED' || incoming().status == 'SUBMITTED') &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'status', 'quotedPrice', 'availability', 'estimatedDelivery',
+                            'proposalNotes', 'vendorReply', 'updatedAt'
+                          ]))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(quotationId) &&
+                       (existing().societyAdminUid == request.auth.uid || isSuperAdmin());
+    }
+  }
+}

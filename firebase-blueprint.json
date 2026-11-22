@@ -1,0 +1,202 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user profile storing role preference, active society context, flat/unit, and vendor business name.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the user." },
+        "displayName": { "type": "string", "description": "User full name." },
+        "email": { "type": "string", "description": "User email from Google Sign-In (PII, owner-only)." },
+        "activeRole": { "type": "string", "enum": ["MEMBER", "ADMIN", "VENDOR"], "description": "Current workspace role." },
+        "activeSocietyId": { "type": "string", "description": "Currently selected residential society ID." },
+        "activeSocietyName": { "type": "string", "description": "Currently selected residential society name." },
+        "flatNumber": { "type": "string", "description": "Resident apartment or unit number." },
+        "businessName": { "type": "string", "description": "Optional vendor business name." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update." }
+      },
+      "required": ["userId", "displayName", "activeRole", "createdAt", "updatedAt"]
+    },
+    "Society": {
+      "title": "Society",
+      "description": "Residential apartment community or housing society.",
+      "type": "object",
+      "properties": {
+        "adminUid": { "type": "string", "description": "UID of the society creator/admin." },
+        "adminName": { "type": "string", "description": "Display name of the society admin." },
+        "name": { "type": "string", "description": "Name of the residential society." },
+        "city": { "type": "string", "description": "City where the society is located." },
+        "address": { "type": "string", "description": "Street or neighborhood address." },
+        "totalUnits": { "type": "integer", "description": "Total residential flats/units in the society." },
+        "inviteCode": { "type": "string", "description": "Short join code for residents." },
+        "memberCount": { "type": "integer", "description": "Current active registered member count." },
+        "discoverable": { "type": "boolean", "description": "Whether the society is discoverable in directory search." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update." }
+      },
+      "required": ["adminUid", "adminName", "name", "city", "address", "totalUnits", "inviteCode", "memberCount", "discoverable", "createdAt", "updatedAt"]
+    },
+    "SocietyMember": {
+      "title": "SocietyMember",
+      "description": "Membership record tying an authenticated user to a specific society.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Authenticated user UID." },
+        "societyId": { "type": "string", "description": "Parent society ID." },
+        "displayName": { "type": "string", "description": "Member display name." },
+        "flatNumber": { "type": "string", "description": "Flat or unit number." },
+        "role": { "type": "string", "enum": ["MEMBER", "ADMIN"], "description": "Role inside the society." },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"], "description": "Membership status." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of joining." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update." }
+      },
+      "required": ["userId", "societyId", "displayName", "flatNumber", "role", "status", "createdAt", "updatedAt"]
+    },
+    "Offer": {
+      "title": "Offer",
+      "description": "Community bulk deal or service campaign managed through interest collection, threshold validation, vendor negotiation, and final confirmation.",
+      "type": "object",
+      "properties": {
+        "societyId": { "type": "string", "description": "Society ID." },
+        "societyName": { "type": "string", "description": "Society name." },
+        "societyAdminUid": { "type": "string", "description": "Admin UID who owns the society." },
+        "title": { "type": "string", "description": "Offer title." },
+        "description": { "type": "string", "description": "Detailed offer description." },
+        "category": { "type": "string", "enum": ["GROCERY", "CLEANING", "DAILY_ESSENTIALS", "PEST_CONTROL", "APPLIANCE", "PLUMBING_ELECTRICAL", "OTHER"], "description": "Offer category." },
+        "estimatedPrice": { "type": "number", "description": "Expected unit price before vendor negotiation." },
+        "unitLabel": { "type": "string", "description": "Pricing unit label (e.g. per 5kg pack, per 2BHK)." },
+        "negotiatedPrice": { "type": "number", "description": "Final negotiated unit price after vendor selection." },
+        "minThreshold": { "type": "integer", "description": "Minimum participation threshold." },
+        "thresholdType": { "type": "string", "enum": ["MEMBERS", "QUANTITY"], "description": "Whether threshold is counted by members or total quantity." },
+        "maxLimit": { "type": "integer", "description": "Optional maximum participation limit (0 = unlimited)." },
+        "interestedCount": { "type": "integer", "description": "Count of interested members." },
+        "totalRequestedQty": { "type": "integer", "description": "Sum of requested quantities across interested members." },
+        "confirmedCount": { "type": "integer", "description": "Count of members who confirmed the final negotiated order." },
+        "confirmedQty": { "type": "integer", "description": "Total confirmed units after final offer publication." },
+        "status": { "type": "string", "enum": ["COLLECTING_INTEREST", "THRESHOLD_REACHED", "VENDOR_NEGOTIATION", "FINAL_OFFER_PUBLISHED", "CLOSED", "CANCELLED"], "description": "Campaign lifecycle stage." },
+        "deadlineLabel": { "type": "string", "description": "Human-readable collection deadline." },
+        "serviceDetails": { "type": "string", "description": "Delivery or service execution details." },
+        "selectedVendorUid": { "type": "string", "description": "Selected vendor UID." },
+        "selectedVendorName": { "type": "string", "description": "Selected vendor business name." },
+        "selectedQuotationId": { "type": "string", "description": "Accepted quotation document ID." },
+        "finalTerms": { "type": "string", "description": "Final negotiated terms and cancellation window." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update." }
+      },
+      "required": [
+        "societyId", "societyName", "societyAdminUid", "title", "description", "category",
+        "estimatedPrice", "unitLabel", "negotiatedPrice", "minThreshold", "thresholdType",
+        "maxLimit", "interestedCount", "totalRequestedQty", "confirmedCount", "confirmedQty",
+        "status", "deadlineLabel", "serviceDetails", "createdAt", "updatedAt"
+      ]
+    },
+    "Participation": {
+      "title": "Participation",
+      "description": "Member participation record tracking Stage 1 (Interest) separately from Stage 2 (Final Order Confirmation).",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Participating member UID." },
+        "memberName": { "type": "string", "description": "Member name for society admin consolidated demand report." },
+        "flatNumber": { "type": "string", "description": "Member flat/unit for delivery." },
+        "societyId": { "type": "string", "description": "Society ID." },
+        "societyAdminUid": { "type": "string", "description": "Admin UID of the society for consolidated admin queries." },
+        "offerId": { "type": "string", "description": "Offer ID." },
+        "offerTitle": { "type": "string", "description": "Offer title snapshot." },
+        "stage": { "type": "string", "enum": ["INTERESTED", "WITHDRAWN", "CONFIRMED", "CANCELLED"], "description": "Two-stage participation state." },
+        "requestedQty": { "type": "integer", "description": "Quantity requested during interest collection." },
+        "confirmedQty": { "type": "integer", "description": "Final confirmed quantity after final offer." },
+        "preferredOption": { "type": "string", "description": "Preferred service slot or package option." },
+        "unitPrice": { "type": "number", "description": "Applicable unit price." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update." }
+      },
+      "required": [
+        "userId", "memberName", "flatNumber", "societyId", "societyAdminUid",
+        "offerId", "offerTitle", "stage", "requestedQty", "confirmedQty",
+        "preferredOption", "unitPrice", "createdAt", "updatedAt"
+      ]
+    },
+    "VendorProfile": {
+      "title": "VendorProfile",
+      "description": "Registered service provider or bulk vendor catalog profile without private personal PII.",
+      "type": "object",
+      "properties": {
+        "vendorUid": { "type": "string", "description": "Vendor user UID." },
+        "businessName": { "type": "string", "description": "Registered vendor business name." },
+        "category": { "type": "string", "enum": ["GROCERY", "CLEANING", "DAILY_ESSENTIALS", "PEST_CONTROL", "APPLIANCE", "PLUMBING_ELECTRICAL", "OTHER"], "description": "Primary service category." },
+        "city": { "type": "string", "description": "Primary operating city." },
+        "description": { "type": "string", "description": "Capabilities and service summary." },
+        "activeCatalog": { "type": "boolean", "description": "Whether visible to society admins for quotation invites." },
+        "completedDeals": { "type": "integer", "description": "Number of completed community campaigns." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update." }
+      },
+      "required": ["vendorUid", "businessName", "category", "city", "description", "activeCatalog", "completedDeals", "createdAt", "updatedAt"]
+    },
+    "Quotation": {
+      "title": "Quotation",
+      "description": "Vendor quotation invitation and proposal for an aggregated society offer without exposing individual member PII.",
+      "type": "object",
+      "properties": {
+        "societyId": { "type": "string", "description": "Society ID." },
+        "societyName": { "type": "string", "description": "Society name." },
+        "societyAdminUid": { "type": "string", "description": "Admin UID who invited the vendor." },
+        "offerId": { "type": "string", "description": "Target offer ID." },
+        "offerTitle": { "type": "string", "description": "Offer title." },
+        "offerCategory": { "type": "string", "description": "Offer category." },
+        "aggregatedMemberCount": { "type": "integer", "description": "Aggregated interested members count." },
+        "aggregatedQty": { "type": "integer", "description": "Aggregated requested units." },
+        "estimatedPrice": { "type": "number", "description": "Society target unit price." },
+        "unitLabel": { "type": "string", "description": "Pricing unit label." },
+        "vendorUid": { "type": "string", "description": "Invited vendor UID." },
+        "vendorName": { "type": "string", "description": "Vendor business name." },
+        "status": { "type": "string", "enum": ["INVITED", "SUBMITTED", "ACCEPTED", "REJECTED"], "description": "Quotation workflow status." },
+        "quotedPrice": { "type": "number", "description": "Vendor quoted unit price." },
+        "availability": { "type": "string", "description": "Service availability window." },
+        "estimatedDelivery": { "type": "string", "description": "Estimated delivery or completion timeline." },
+        "proposalNotes": { "type": "string", "description": "Vendor proposal terms and inclusions." },
+        "adminQuery": { "type": "string", "description": "Admin clarification question to vendor." },
+        "vendorReply": { "type": "string", "description": "Vendor response to admin query." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update." }
+      },
+      "required": [
+        "societyId", "societyName", "societyAdminUid", "offerId", "offerTitle", "offerCategory",
+        "aggregatedMemberCount", "aggregatedQty", "estimatedPrice", "unitLabel", "vendorUid", "vendorName",
+        "status", "quotedPrice", "availability", "estimatedDelivery", "proposalNotes",
+        "adminQuery", "vendorReply", "createdAt", "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Owner-isolated user profile and workspace preferences."
+    },
+    "/societies/{societyId}": {
+      "schema": { "$ref": "#/entities/Society" },
+      "description": "Residential societies created by society admins and discoverable by residents."
+    },
+    "/societies/{societyId}/members/{memberId}": {
+      "schema": { "$ref": "#/entities/SocietyMember" },
+      "description": "Society membership roster isolating each society."
+    },
+    "/societies/{societyId}/offers/{offerId}": {
+      "schema": { "$ref": "#/entities/Offer" },
+      "description": "Bulk deals and community service campaigns scoped to a residential society."
+    },
+    "/participations/{participationId}": {
+      "schema": { "$ref": "#/entities/Participation" },
+      "description": "Member interest and final order confirmations across society offers."
+    },
+    "/vendors/{vendorId}": {
+      "schema": { "$ref": "#/entities/VendorProfile" },
+      "description": "Registered service provider catalog."
+    },
+    "/quotations/{quotationId}": {
+      "schema": { "$ref": "#/entities/Quotation" },
+      "description": "Vendor quotation requests and bids shared strictly between society admin and invited vendor."
+    }
+  }
+}
